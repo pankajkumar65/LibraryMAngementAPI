@@ -1,0 +1,6 @@
+package com.Library.Mangement.Email;
+
+public interface EmailService {
+    void sendEmail(String to, String subject, String body);
+}
+
