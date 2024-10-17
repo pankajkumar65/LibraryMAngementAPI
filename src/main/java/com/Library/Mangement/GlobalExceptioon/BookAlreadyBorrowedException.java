@@ -5,4 +5,3 @@ public class BookAlreadyBorrowedException extends RuntimeException {
         super(message);
     }
 }
-

@@ -33,4 +33,14 @@ public class BorrowingController {
         List<BorrowedRequest> borrowedBooks = borrowingService.getBorrowedBooks(userId);
         return new ResponseEntity<>(borrowedBooks, HttpStatus.OK);
     }
+
+    @PostMapping("/release/{bookId}")
+    public ResponseEntity<String> releaseBook(@PathVariable Long bookId) {
+        try {
+            String response = borrowingService.releaseBook(bookId);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.FORBIDDEN);
+        }
+    }
 }

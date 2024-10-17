@@ -15,10 +15,10 @@ public class AdvanceBookingController {
 
     private final AdvanceBookingService advanceBookingService;
 
-    @PostMapping("/advance-booking")
-    public ResponseEntity<String> makeAdvanceBooking(@RequestBody AdvanceBookingRequest advanceBookingRequest) {
+    @PostMapping("/advance-booking/{bookId}")
+    public ResponseEntity<String> makeAdvanceBooking(@PathVariable Long bookId) {
         try {
-            String successMessage = advanceBookingService.makeAdvanceBooking(advanceBookingRequest);
+            String successMessage = advanceBookingService.makeAdvanceBooking(bookId);
             return new ResponseEntity<>(successMessage, HttpStatus.CREATED);
         } catch (ResourceNotFoundException e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);

@@ -41,9 +41,10 @@ public class SecurityConfiguration {
 //                                .requestMatchers(GET, "/api/v1/book/**").hasAnyRole(Role.USER.name(), Role.AUTHOR.name())// Both users and authors can read books
                                 .requestMatchers(GET, "/api/v1/author/books").hasRole(Role.AUTHOR.name())
                                 .requestMatchers(POST, "/api/v1/book/add").hasRole(Role.AUTHOR.name())  // Only authors can add books
+                                .requestMatchers(POST, "/admin/handle-author/**").hasRole(Role.ADMIN.name())  // Only authors can add books
                                 .requestMatchers(DELETE, "/api/v1/book/delete/**").hasRole(Role.AUTHOR.name()) // Only authors can delete books
                                 .requestMatchers(GET,  "/api/v1/borrowed-books","/api/v1/book/list").hasRole(Role.USER.name()) // Only authors can delete books
-                                .requestMatchers(POST, "/api/v1/borrow/**", "/api/v1/advance-booking" ,"api/v1/notify-users/**").hasRole(Role.USER.name())
+                                .requestMatchers(POST, "/api/v1/borrow/**", "/api/v1/advance-booking/**","api/v1/release/**").hasRole(Role.USER.name())
                                 // Any other request requires authentication
                                 .anyRequest().authenticated()
                 )

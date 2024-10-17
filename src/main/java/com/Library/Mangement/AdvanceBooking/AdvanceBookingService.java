@@ -1,21 +1,20 @@
 package com.Library.Mangement.AdvanceBooking;
 
+import com.Library.Mangement.BorrowBook.Borrowing;
 import com.Library.Mangement.BorrowBook.BorrowingRepository;
-import com.Library.Mangement.GlobalExceptioon.BookAlreadyBorrowedException;
 import com.Library.Mangement.GlobalExceptioon.ResourceNotFoundException;
-import com.Library.Mangement.GlobalExceptioon.UserAlreadyBookedException;
 import com.Library.Mangement.book.Book;
 import com.Library.Mangement.book.BookRepository;
 import com.Library.Mangement.Email.EmailService;
 import com.Library.Mangement.user.User;
-import com.Library.Mangement.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.time.LocalDate;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -27,63 +26,57 @@ public class AdvanceBookingService {
     private final EmailService emailService;
 
     @Transactional
-    public String makeAdvanceBooking(AdvanceBookingRequest advanceBookingRequest) {
-        Book book = bookRepository.findById(advanceBookingRequest.getBookId())
-                .orElseThrow(() -> new ResourceNotFoundException("Book not found with ID: " + advanceBookingRequest.getBookId()));
-
-        // Check if the book is already borrowed in the requested date range
-        boolean isBookBorrowed = borrowingRepository.existsByBookIdAndBorrowedDateBetween(
-                advanceBookingRequest.getBookId(),
-                advanceBookingRequest.getStartDate(),
-                advanceBookingRequest.getEndDate());
-
-        if (isBookBorrowed) {
-            throw new BookAlreadyBorrowedException("The book is already borrowed during this date range.");
-        }
+    public String makeAdvanceBooking(Long bookId) {
+        // Retrieve the book using the provided book ID
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new ResourceNotFoundException("Book not found"));
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         User user = (User) authentication.getPrincipal();
 
         // Check if the user already has an advance booking for the same book
-        boolean userAlreadyBooked = advanceBookingRepository.existsByUserAndBook(user, book);
-        if (userAlreadyBooked) {
-            throw new UserAlreadyBookedException("You have already made an advance booking for this book.");
+        boolean hasExistingBooking = advanceBookingRepository.existsByUserAndBook(user, book);
+        if (hasExistingBooking) {
+            return "You already have an advance booking for this book.";
         }
 
-        // Create the booking and mark it as unnotified
-        Advancebooking advanceBooking = Advancebooking.builder()
-                .book(book)
-                .user(user)
-                .startDate(advanceBookingRequest.getStartDate())
-                .endDate(advanceBookingRequest.getEndDate())
-                .isNotified(false)
-                .build();
+        // Fetch the current borrowing record for the book, if any
+        Optional<Borrowing> currentBorrowing = borrowingRepository.findFirstByBookOrderByReturnDateDesc(book);
 
-        advanceBooking = advanceBookingRepository.save(advanceBooking);
+        LocalDate startDate;
+        LocalDate endDate;
 
-        // Optionally notify users if the book is currently available
-        if (!borrowingRepository.existsByBookId(advanceBookingRequest.getBookId())) {
-            notifyUsersForAvailableBook(book);
+        if (currentBorrowing.isPresent()) {
+            // If the book is currently borrowed, set the advance booking from the return date
+            startDate = currentBorrowing.get().getReturnDate();
+            endDate = startDate.plusDays(15);
+
+            // Create and save the advance booking for future borrowing
+            Advancebooking advanceBooking = Advancebooking.builder()
+                    .book(book)
+                    .user(user)
+                    .startDate(startDate)
+                    .endDate(endDate)
+                    .isNotified(false)
+                    .build();
+            advanceBookingRepository.save(advanceBooking);
+
+            return "The book is currently borrowed. Your advance booking has been created for the period "
+                    + startDate + " to " + endDate + ".";
+        } else {
+            // If the book is not currently borrowed, automatically borrow it for the user
+            borrowBookForUser(user, book);
+            return "The book was available and has been successfully borrowed for 15 days.";
         }
-
-        return "Your booking has been done successfully.";
     }
 
-    private void notifyUsersForAvailableBook(Book book) {
-        List<Advancebooking> advanceBookings = advanceBookingRepository.findAllByBook(book);
-
-        for (Advancebooking booking : advanceBookings) {
-            User user = booking.getUser();
-            if (!booking.getIsNotified()) {
-                String emailMessage = String.format("Dear %s, the book '%s' is now available for borrowing.",
-                        user.getFirstname() + " " + user.getLastname(), book.getBookName());
-
-                emailService.sendEmail(user.getEmail(), "Book Available for Borrowing", emailMessage);
-
-                // Mark user as notified
-                booking.setIsNotified(true);
-                advanceBookingRepository.save(booking);
-            }
-        }
+    private void borrowBookForUser(User user, Book book) {
+        Borrowing newBorrowing = Borrowing.builder()
+                .user(user)
+                .book(book)
+                .borrowedDate(LocalDate.now())
+                .returnDate(LocalDate.now().plusDays(15)) // Assuming 15 days borrowing
+                .build();
+        borrowingRepository.save(newBorrowing);
     }
 }

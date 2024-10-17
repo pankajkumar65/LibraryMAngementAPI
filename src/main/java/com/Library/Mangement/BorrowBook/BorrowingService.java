@@ -1,9 +1,13 @@
 package com.Library.Mangement.BorrowBook;
 
+import com.Library.Mangement.AdvanceBooking.AdvanceBookingRepository;
+import com.Library.Mangement.AdvanceBooking.Advancebooking;
+import com.Library.Mangement.Email.EmailService;
 import com.Library.Mangement.book.Book;
 import com.Library.Mangement.book.BookRepository;
 import com.Library.Mangement.user.User;
 import com.Library.Mangement.user.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,6 +24,8 @@ public class BorrowingService {
     private final BorrowingRepository borrowingRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
+    private final AdvanceBookingRepository advanceBookingRepository;
+    private final EmailService emailService;
 
     public String borrowBook(Long bookId) {
         // Get the authenticated user
@@ -41,7 +47,7 @@ public class BorrowingService {
                 .anyMatch(borrowing -> borrowing.getBook().getId().equals(book.getId()));
 
         if (alreadyBorrowed) {
-            throw new IllegalArgumentException("User has already borrowed this book.");
+            throw new IllegalArgumentException("This book is already borrowed!.");
         }
 
         LocalDate borrowedDate = LocalDate.now();
@@ -61,10 +67,43 @@ public class BorrowingService {
         return String.format("The book '%s' has been borrowed by '%s' successfully.", book.getBookName(), user.getFirstname() + " " + user.getLastname());
     }
 
+    @Transactional
+    public String releaseBook(Long bookId) {
+        // Get the authenticated user
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        User user = (User) authentication.getPrincipal();
+
+        // Find the borrowing record by book ID and user ID
+        Borrowing borrowing = borrowingRepository.findByBookIdAndUserId(bookId, user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("No borrowing record found for this book and user."));
+
+        // Set release date as today
+        borrowing.setReleaseDate(LocalDate.now());
+        borrowingRepository.save(borrowing);
+
+        // Check for advance bookings for the same book
+        List<Advancebooking> advanceBookings = advanceBookingRepository.findAllByBook(borrowing.getBook());
+        if (!advanceBookings.isEmpty()) {
+            Advancebooking topBooking = advanceBookings.get(0); // Get the top booking
+            User topUser = topBooking.getUser();
+
+            // Notify the user via email
+            String emailMessage = String.format("Dear %s, the book '%s' is now available for borrowing.",
+                    topUser.getFirstname(), borrowing.getBook().getBookName());
+            emailService.sendEmail(topUser.getEmail(), "Book Available for Borrowing", emailMessage);
+
+            // Mark the user as notified
+            topBooking.setIsNotified(true);
+            advanceBookingRepository.save(topBooking);
+        }
+
+        return "Book released successfully.";
+    }
+
     public List<BorrowedRequest> getBorrowedBooks(Long userId) {
         List<Borrowing> borrowings = borrowingRepository.findAllByUserId(userId);
 
-        // Map Borrowing entities to BorrowedBookDTOs
+        // Map Borrowing entities to BorrowedRequest DTOs
         return borrowings.stream()
                 .map(borrowing -> new BorrowedRequest(
                         borrowing.getId(),

@@ -37,7 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
         // Skip filter for /api/v1/auth and preflight OPTIONS requests
-        if (request.getServletPath().contains("/api/v1/ooks") || request.getMethod().equalsIgnoreCase("OPTIONS")) {
+        if (request.getServletPath().contains("/api/v1/books") || request.getMethod().equalsIgnoreCase("OPTIONS")) {
             filterChain.doFilter(request, response);
             return;
         }

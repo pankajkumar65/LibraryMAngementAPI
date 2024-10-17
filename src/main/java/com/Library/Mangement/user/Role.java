@@ -11,7 +11,9 @@ import java.util.stream.Collectors;
     public enum Role {
 
         USER,
-        AUTHOR;
+        AUTHOR,
+        ADMIN,
+        PENDING_AUTHOR;
 
         // Simplifying the logic to return the role as the only authority
         public Set<SimpleGrantedAuthority> getAuthorities() {
